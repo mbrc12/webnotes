@@ -1,0 +1,14 @@
+1. The program here will look at a directory of files.
+2a. For each extension, the theme file will have a command and a output file extension.
+2b. Or it will have a template within which we can replace the filepath. 
+3. If there is a option --full, then it will scan whole directory for changes since last time.
+4. It will maintain a local database in the folder which will store the SHA256 sums for all the files in it.
+5. Under --full <path>, if anything has changed, we will update it.
+6. Otherwise we will expect a filename
+7. If that file has changed, we will recompile the html files.
+8. The --profile option needs to be set the first time around. It will load a theme file.
+9. A profile file will contain the following:
+    a. Front page theme.
+    b. List of extensions and how to handle them.
+    c. Git commands to run after changes.
+10. A webnotes folder will be created which will contain the git repository

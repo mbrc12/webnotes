@@ -1,0 +1,52 @@
+name:                webnotes
+version:             0.1.0.0
+github:              "mbrc12/webnotes"
+license:             BSD3
+author:              "Mriganka Basu Roy Chowdhury"
+maintainer:          "mbrc12@gmail.com"
+copyright:           "MIT License"
+
+extra-source-files:
+    - README.md
+    - ChangeLog.md
+
+      # Metadata used when publishing your package
+      # synopsis:            Short description of your package
+      # category:            Web
+
+      # To avoid duplicated efforts in documentation and dealing with the
+      # complications of embedding Haddock markup inside cabal files, it is
+      # common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/mbrc12/webnotes#readme>
+
+dependencies:
+    - base >= 4.7 && < 5
+
+library:
+    source-dirs: src
+    dependencies:
+        - unordered-containers
+        - filepath
+        - microstache
+        - aeson  
+        - bytestring
+        - conduit
+        - conduit-extra
+        - cryptohash-sha256
+        - directory
+        - time
+        - text
+        - turtle
+        - yaml
+
+executables:
+    webnotes-exe:
+        main:                Main.hs
+        source-dirs:         app
+        ghc-options:
+            - -threaded
+            - -rtsopts
+            - -with-rtsopts=-N
+        dependencies:
+          - optparse-applicative
+          - webnotes

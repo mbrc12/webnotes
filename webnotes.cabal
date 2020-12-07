@@ -1,0 +1,68 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: edde5ca853cae8048908e2b064ba48ab058990d90c47b01fcf2633e2662ca08e
+
+name:           webnotes
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/mbrc12/webnotes#readme>
+homepage:       https://github.com/mbrc12/webnotes#readme
+bug-reports:    https://github.com/mbrc12/webnotes/issues
+author:         Mriganka Basu Roy Chowdhury
+maintainer:     mbrc12@gmail.com
+copyright:      MIT License
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/mbrc12/webnotes
+
+library
+  exposed-modules:
+      WebNotes.ConfigParser
+      WebNotes.JobSystem
+      WebNotes.Notification
+      WebNotes.SHA
+      WebNotes.Template
+      WebNotes.Utils
+  other-modules:
+      Paths_webnotes
+  hs-source-dirs:
+      src
+  build-depends:
+      aeson
+    , base >=4.7 && <5
+    , bytestring
+    , conduit
+    , conduit-extra
+    , cryptohash-sha256
+    , directory
+    , filepath
+    , microstache
+    , text
+    , time
+    , turtle
+    , unordered-containers
+    , yaml
+  default-language: Haskell2010
+
+executable webnotes-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_webnotes
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , optparse-applicative
+    , webnotes
+  default-language: Haskell2010
