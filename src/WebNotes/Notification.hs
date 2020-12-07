@@ -12,6 +12,7 @@ where
 
 import Conduit hiding (connect)
 import Control.Monad (forever, unless, when)
+import Control.Monad.IO.Class
 import Data.Conduit.Network
 import Data.Conduit.Text
 import Data.Function ((&))
@@ -40,9 +41,9 @@ data Response
   | Fail
   deriving (Show)
 
-notificationMachineServer :: Int -> ConduitT Message Response IO () -> IO ()
+notificationMachineServer :: (MonadUnliftIO m, MonadThrow m) => Int -> ConduitT Message Response m () -> m ()
 notificationMachineServer port serverHandlerC =
-  runTCPServer serverSett $ \appData ->
+  runGeneralTCPServer serverSett $ \appData ->
     let sourceC = appSource appData
         sinkC = appSink appData
      in sourceC 
@@ -81,7 +82,7 @@ notificationMachineServer port serverHandlerC =
 --   where
 --     clientSett = clientSettings port "localhost"
 
-accumulateTillSubstr :: T.Text -> ConduitT T.Text a IO T.Text
+accumulateTillSubstr :: (MonadIO m) => T.Text -> ConduitT T.Text a m T.Text
 accumulateTillSubstr substr = accumAll ""
   where 
     accumAll acc = do
@@ -93,7 +94,7 @@ accumulateTillSubstr substr = accumAll ""
                           then return (T.append acc message)
                           else accumAll (T.append acc message)
 
-messageConverterC :: ConduitT T.Text Message IO ()
+messageConverterC :: (MonadIO m) => ConduitT T.Text Message m ()
 messageConverterC = do
   accum <- accumulateTillSubstr stopIdentifier
   liftIO $ TIO.putStrLn (T.append "got -> " accum)
@@ -128,7 +129,7 @@ messageConverterC = do
 --         FullScan -> yield fullScanCommand
 --       yield stopIdentifier
 
-responseConverterC :: ConduitT Response T.Text IO ()
+responseConverterC :: (MonadIO m) => ConduitT Response T.Text m ()
 responseConverterC = awaitForever $ \resp -> resp & show & T.pack & yield
 
 -- responseClientConverterC :: ConduitT T.Text Response IO ()

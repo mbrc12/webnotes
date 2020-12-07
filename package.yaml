@@ -28,6 +28,8 @@ library:
         - directory
         - filepath
         - microstache
+        - mtl
+        - stm
         - text
         - time
         - turtle
@@ -50,6 +52,10 @@ executables:
           - optparse-applicative
           - conduit
           - webnotes
+          - stm
+          - mtl
+          - yaml
+          - unordered-containers
           # - ekg
 
   webnotes-client:
@@ -65,5 +71,9 @@ executables:
           - optparse-applicative
           - conduit
           - webnotes
+          - stm
+          - mtl
+          - yaml
+          - unordered-containers
           # - ekg  
 
