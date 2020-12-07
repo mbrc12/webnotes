@@ -1,0 +1,17 @@
+shell_name: fish
+
+source_dir: notes/
+
+work_dir: output/
+
+index_template: Index template
+
+page_template: Page template
+
+final_commands: git push -u origin main
+
+conversions:
+  - type: convert  
+    from: svgz
+    to: svg
+    commands: "cat .. | gunzip"

@@ -10,13 +10,6 @@ extra-source-files:
     - README.md
     - ChangeLog.md
 
-      # Metadata used when publishing your package
-      # synopsis:            Short description of your package
-      # category:            Web
-
-      # To avoid duplicated efforts in documentation and dealing with the
-      # complications of embedding Haddock markup inside cabal files, it is
-      # common to point users to the README.md file.
 description:         Please see the README on GitHub at <https://github.com/mbrc12/webnotes#readme>
 
 dependencies:
@@ -25,28 +18,52 @@ dependencies:
 library:
     source-dirs: src
     dependencies:
-        - unordered-containers
-        - filepath
-        - microstache
-        - aeson  
+        - aeson
         - bytestring
         - conduit
         - conduit-extra
+        - pipes
+        - pipes-network 
         - cryptohash-sha256
         - directory
-        - time
+        - filepath
+        - microstache
         - text
+        - time
         - turtle
+        - unordered-containers
+        - network-simple  
         - yaml
+        # - ekg  
 
 executables:
-    webnotes-exe:
-        main:                Main.hs
+  webnotes-server:
+        main:                Server.hs
         source-dirs:         app
         ghc-options:
-            - -threaded
-            - -rtsopts
-            - -with-rtsopts=-N
+          - -O3
+          - -threaded
+          - -rtsopts
+          - -with-rtsopts=-N
+          - -main-is Server
         dependencies:
           - optparse-applicative
+          - conduit
           - webnotes
+          # - ekg
+
+  webnotes-client:
+        main:                Client.hs
+        source-dirs:         app
+        ghc-options:
+          - -O3
+          - -threaded
+          - -rtsopts
+          - -with-rtsopts=-N
+          - -main-is Client  
+        dependencies:
+          - optparse-applicative
+          - conduit
+          - webnotes
+          # - ekg  
+

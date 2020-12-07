@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: edde5ca853cae8048908e2b064ba48ab058990d90c47b01fcf2633e2662ca08e
+-- hash: 9f1f1a9d443643028ab2d5429756c086e80f01a466f2b5caaee9fa1bf7ff8360
 
 name:           webnotes
 version:        0.1.0.0
@@ -47,6 +47,9 @@ library
     , directory
     , filepath
     , microstache
+    , network-simple
+    , pipes
+    , pipes-network
     , text
     , time
     , turtle
@@ -54,15 +57,32 @@ library
     , yaml
   default-language: Haskell2010
 
-executable webnotes-exe
-  main-is: Main.hs
+executable webnotes-client
+  main-is: Client.hs
   other-modules:
+      Server
       Paths_webnotes
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -O3 -threaded -rtsopts -with-rtsopts=-N -main-is Client
   build-depends:
       base >=4.7 && <5
+    , conduit
+    , optparse-applicative
+    , webnotes
+  default-language: Haskell2010
+
+executable webnotes-server
+  main-is: Server.hs
+  other-modules:
+      Client
+      Paths_webnotes
+  hs-source-dirs:
+      app
+  ghc-options: -O3 -threaded -rtsopts -with-rtsopts=-N -main-is Server
+  build-depends:
+      base >=4.7 && <5
+    , conduit
     , optparse-applicative
     , webnotes
   default-language: Haskell2010

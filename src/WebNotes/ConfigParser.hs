@@ -2,6 +2,8 @@
 
 module WebNotes.ConfigParser
   (
+    ConfigFile(..),
+    Action(..)
   )
 where
 
@@ -19,6 +21,7 @@ import Data.HashMap.Strict (HashMap, member, (!))
 
 data ConfigFile = ConfigFile 
   { shellName :: String,
+    sourceDir :: FilePath,
     workDir :: FilePath,
     indexTemplate :: T.Text,
     pageTemplate :: T.Text,
@@ -68,6 +71,7 @@ instance FromJSON Action where
 instance FromJSON ConfigFile where
   parseJSON (Object obj) = ConfigFile 
     <$> obj .: "shell_name"
+    <*> obj .: "source_dir"
     <*> obj .: "work_dir"
     <*> obj .: "index_template"
     <*> obj .: "page_template"
