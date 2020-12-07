@@ -1,11 +1,11 @@
-{-# LANGUAGE OverloadedStrings, DeriveGeneric, ApplicativeDo #-}
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 
 module WebNotes.ConfigParser
   (
   )
 where
 
-import WebNotes.Utils (Extension)
+import WebNotes.Utils (Extension, emptyOrUnMaybe)
 import WebNotes.JobSystem
 
 import Data.Function ((&))
@@ -18,8 +18,8 @@ import qualified Data.Text.Lazy as TL
 import Data.HashMap.Strict (HashMap, member, (!))
 
 data ConfigFile = ConfigFile 
-  { shellName :: T.Text,
-    workDir :: T.Text,
+  { shellName :: String,
+    workDir :: FilePath,
     indexTemplate :: T.Text,
     pageTemplate :: T.Text,
     finalCommands :: T.Text,
@@ -37,8 +37,8 @@ convertActionBuilder from to commands =
        Right template -> Just $ 
          ActionFor from (Convert { destExt = to, commands = template })
 
-pageActionBuilder :: Extension -> Extension -> T.Text -> Maybe Action
-pageActionBuilder from to commands = 
+pageActionBuilder :: Extension -> T.Text -> Maybe Action
+pageActionBuilder from commands = 
   let templateName = from ++ "-page" & T.pack & PName
       result = MS.compileMustacheText templateName (TL.fromStrict commands)
   in case result of 
@@ -47,22 +47,16 @@ pageActionBuilder from to commands =
          ActionFor from (Page { commands = template })
 
 
-emptyOrUnMaybe :: (Applicative m) => m (Either a b) -> m b
-emptyOrUnMaybe x = do
-  z <- x
-  case z of 
-    Left _ -> empty
-    Right y -> return y
-
 instance FromJSON Action where
   parseJSON (Object obj) = 
-    if member obj tagIdentifier
+    if member tagIdentifier obj
        then case obj ! tagIdentifier of
               String "convert" -> convertActionBuilder
                 <$> obj .: "from"
                 <*> obj .: "to"
                 <*> obj .: "commands"
                 & emptyOrUnMaybe
+
               String "page" -> pageActionBuilder
                 <$> obj .: "from"
                 <*> obj .: "commands"
@@ -81,4 +75,5 @@ instance FromJSON ConfigFile where
     <*> obj .: "conversions"
 
   parseJSON invalid = empty
+
 

@@ -2,11 +2,12 @@ module WebNotes.Utils
   ( doBoth,
     explode,
     Extension(..),
+    emptyOrUnMaybe
   )
 where
 
 import System.FilePath
-
+import Control.Monad (MonadPlus, mzero)
 
 type Extension = String
 
@@ -22,4 +23,12 @@ explode path =
   let (rest, ext) = splitExtension path
       (dir, fileName) = splitFileName rest
   in (dir, fileName, ext)
+
+
+emptyOrUnMaybe :: (MonadPlus m) => m (Maybe b) -> m b
+emptyOrUnMaybe x = do
+  z <- x
+  case z of 
+    Nothing -> mzero
+    Just y -> return y
 
