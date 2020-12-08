@@ -30,5 +30,6 @@ hasher sha = do
 byteStringToHex :: BS.ByteString -> String
 byteStringToHex = BSC.unpack . BSL.toStrict . BSB.toLazyByteString . BSB.byteStringHex
 
+computeSHA :: FilePath -> IO String
 computeSHA filepath =
   source filepath .| hasher SHA.init & runConduit & runResourceT <&> byteStringToHex

@@ -23,8 +23,7 @@ data ConfigFile = ConfigFile
   { shellName :: String,
     sourceDir :: FilePath,
     workDir :: FilePath,
-    indexTemplate :: T.Text,
-    pageTemplate :: T.Text,
+    indexTemplateRaw :: T.Text,
     finalCommands :: T.Text,
     conversions :: [Action]
   } deriving (Show, Generic)
@@ -62,7 +61,7 @@ instance FromJSON Action where
 
               String "page" -> pageActionBuilder
                 <$> obj .: "from"
-                <*> obj .: "commands"
+                <*> obj .: "template"
                 & emptyOrUnMaybe
         else empty
 
@@ -74,7 +73,6 @@ instance FromJSON ConfigFile where
     <*> obj .: "source_dir"
     <*> obj .: "work_dir"
     <*> obj .: "index_template"
-    <*> obj .: "page_template"
     <*> obj .: "final_commands"
     <*> obj .: "conversions"
 

@@ -5,7 +5,8 @@ module WebNotes.JobSystem
     Job(..),
     JobScheme (..),
     formulateJobScheme,
-    executeJobs
+    executeJobs,
+    executeInShell
   )
 where
 
@@ -121,16 +122,18 @@ executeJob (Page {..}) (FileDetails {..}) workDir shellName =
         (readFile currentFile)
         (getAccessTime originalFile))
       (const $ return Failed) $ \(pageContents, lastModified) -> do
-        let command = templatePage commands $
+        let pageContents = templatePage commands $
               PageData { originalPath = originalFile,
                          finalPath = currentFile,
                          pageContents = pageContents,
                          lastModified = lastModified
                        }
-        exit <- executeInShell command workDir shellName
-        return $ case exit of 
-                   True ->  Final destPath
-                   False -> Failed
+        -- exit <- executeInShell command workDir shellName
+        writeFile destPath pageContents
+        return $ Final destPath
+        -- return $ case exit of 
+        --            True ->  Final destPath
+        --            False -> Failed
 
 
 executeOneJob :: JobScheme -> FilePath -> FilePath -> IO JobState

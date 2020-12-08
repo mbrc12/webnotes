@@ -1,2 +1,6 @@
 .stack-work/
+*.lock
+notes/
+output/
+webnotesconf.yaml
 *~

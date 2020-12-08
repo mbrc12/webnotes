@@ -56,6 +56,12 @@ executables:
           - mtl
           - yaml
           - unordered-containers
+          - time
+          - microstache
+          - yaml
+          - text
+          - filepath
+          - directory
           # - ekg
 
   webnotes-client:
@@ -75,5 +81,9 @@ executables:
           - mtl
           - yaml
           - unordered-containers
-          # - ekg  
-
+          - time
+          - microstache
+          - yaml
+          - text
+          - filepath
+          - directory

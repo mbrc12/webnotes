@@ -33,7 +33,7 @@ messageParser = fileChangedParser <|> fullScanParser
 
 clientParser = ClientOptions <$> 
   option auto
-  (   long "--port"
+  (   long "port"
   <>  short 'p'
   <>  help "Port number"
   <>  metavar "PORT"

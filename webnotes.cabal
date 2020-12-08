@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a67a80f46e3ae7017e7e1f12162269d75c068e0e822dbbbaa7fd36b655690f66
+-- hash: 23bdd928fc5fe76c96aa2c8f6d4279321e8f9851fa8c698fd7791eebb5367f88
 
 name:           webnotes
 version:        0.1.0.0
@@ -70,9 +70,14 @@ executable webnotes-client
   build-depends:
       base >=4.7 && <5
     , conduit
+    , directory
+    , filepath
+    , microstache
     , mtl
     , optparse-applicative
     , stm
+    , text
+    , time
     , unordered-containers
     , webnotes
     , yaml
@@ -89,9 +94,14 @@ executable webnotes-server
   build-depends:
       base >=4.7 && <5
     , conduit
+    , directory
+    , filepath
+    , microstache
     , mtl
     , optparse-applicative
     , stm
+    , text
+    , time
     , unordered-containers
     , webnotes
     , yaml

@@ -6,6 +6,7 @@ module WebNotes.Template
     templateIndex,
     PageData(..),
     ConvertData(..),
+    IndexItem(..),
     IndexData(..)
   )
 where
@@ -32,8 +33,14 @@ data ConvertData = ConvertData
     destPath :: FilePath
   }  
 
+data IndexItem = IndexItem
+  { displayPath :: FilePath,
+    lastMod     :: UTCTime
+  }
+
+
 data IndexData = IndexData 
-  { displayPaths :: [FilePath]  -- paths where the final generated pages are stored
+  { items :: [IndexItem]  -- paths where the final generated pages are stored
   }
     
 templateConvert :: M.Template -> ConvertData -> T.Text
@@ -58,5 +65,10 @@ templateIndex :: M.Template -> IndexData -> T.Text
 templateIndex templateData (IndexData {..}) = toStrict $
   M.renderMustache templateData $ object $
     [ 
-      "display_paths" .= (T.pack <$> displayPaths)
+      "items" .= ((\item -> 
+        object $ 
+          [ 
+            "display_path" .= (T.pack $ displayPath item),
+            "last_modified" .= (T.pack . show $ lastMod item)
+          ]) <$> items)
     ]
