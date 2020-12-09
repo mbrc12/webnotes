@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 23bdd928fc5fe76c96aa2c8f6d4279321e8f9851fa8c698fd7791eebb5367f88
+-- hash: 6ef8db6faa26e7f3b9702bd52fac509c8a270533f218554d30fb1942e2e4571e
 
 name:           webnotes
 version:        0.1.0.0
@@ -30,6 +30,7 @@ library
       WebNotes.ConfigParser
       WebNotes.JobSystem
       WebNotes.Notification
+      WebNotes.Paths
       WebNotes.SHA
       WebNotes.Template
       WebNotes.Utils
@@ -46,11 +47,14 @@ library
     , cryptohash-sha256
     , directory
     , filepath
+    , fmt
+    , logging
     , microstache
     , mtl
     , network-simple
     , pipes
     , pipes-network
+    , random >=1.2.0
     , stm
     , text
     , time
@@ -66,12 +70,14 @@ executable webnotes-client
       Paths_webnotes
   hs-source-dirs:
       app
-  ghc-options: -O3 -threaded -rtsopts -with-rtsopts=-N -main-is Client
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -main-is Client
   build-depends:
       base >=4.7 && <5
     , conduit
     , directory
     , filepath
+    , fmt
+    , logging
     , microstache
     , mtl
     , optparse-applicative
@@ -90,12 +96,14 @@ executable webnotes-server
       Paths_webnotes
   hs-source-dirs:
       app
-  ghc-options: -O3 -threaded -rtsopts -with-rtsopts=-N -main-is Server
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -main-is Server
   build-depends:
       base >=4.7 && <5
     , conduit
     , directory
     , filepath
+    , fmt
+    , logging
     , microstache
     , mtl
     , optparse-applicative

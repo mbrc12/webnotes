@@ -3,7 +3,7 @@
 module Server where
 
 import WebNotes.Template
-import WebNotes.JobSystem hiding (workDir)
+import WebNotes.JobSystem hiding (workDir, sourceDir)
 import WebNotes.ConfigParser as CP
 import WebNotes.Notification
 import WebNotes.SHA
@@ -14,10 +14,12 @@ import Conduit
 import Control.Concurrent hiding (yield)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TQueue
+import Control.Logging
 import Control.Monad (forever, filterM, mapM_, when)
 import Control.Monad.RWS.Strict 
 import Control.Monad.Reader (ask)
 import Control.Monad.State.Strict (get, put, modify)
+import Data.List (sortOn)
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.HashMap.Strict hiding (map)
@@ -29,6 +31,7 @@ import Data.Yaml (decodeFileThrow)
 import Options.Applicative hiding (empty)
 import System.Directory (listDirectory, doesDirectoryExist, getAccessTime)
 import System.FilePath ((</>))
+import Fmt (format, formatLn)
 
 -- import System.Remote.Monitoring
 
@@ -36,11 +39,7 @@ import System.FilePath ((</>))
 
 configRelativePath = "webnotesconf.yaml"
 
-data MasterInfo = MasterInfo 
-  { config :: ConfigFile,
-    jobScheme :: JobScheme,
-    indexTemplate :: M.Template
-  }
+type MasterInfo = Config
 
 type Channel = TQueue Message
 type SHAIndex = HashMap FilePath String
@@ -76,14 +75,18 @@ listFiles path = listDirectory path
 
 fullScan :: MasterMonad ()
 fullScan = do
-  source <- sourceDir . config <$> ask
+  log' "Initializing full scan ..."
+
+  source <- sourceDir <$> ask
   files <- liftIO $ listFiles source
   mapM_ fileChanged files
 
 
 fileChanged :: FilePath -> MasterMonad ()
 fileChanged file = do
- 
+
+  log' $ format "Processing {} ..." file
+
   -- update SHA  
 
   sha <- liftIO $ computeSHA file
@@ -94,24 +97,30 @@ fileChanged file = do
   lastAccess <- liftIO $ getAccessTime file
   modify . appModIndex $ insert file lastAccess
 
+  log' $ format "SHA: {}, last accessed: {}" sha lastAccess 
+
   -- execute tasks 
-  scheme <- jobScheme <$> ask
-  destFile <- liftIO $ executeJobs scheme file
+  config <- ask
+  destFile <- liftIO $ executeJobs config file
 
   case destFile of
-    Nothing -> modify . appDestIndex $ delete file
-    Just dest -> modify . appDestIndex $ insert file dest
+    Nothing -> do
+      warn' $ "No destination file produced!"
+      modify . appDestIndex $ delete file
+    Just dest -> do
+      log' $ format "Destination: {}" destFile
+      modify . appDestIndex $ insert file dest
 
 
-sortByValuesInSecond :: (Ord b) => [a] -> HashMap a b -> [a]
-sortByValuesInSecond = undefined
 
 rebuildIndex :: MasterMonad ()
 rebuildIndex = do
+  log' $ format "Rebuilding index..."
+
   files <- keys . destIndex <$> get
   modMap <- modIndex <$> get
 
-  let displayPaths = sortByValuesInSecond files modMap
+  let displayPaths = sortOn (modMap !) files
   let indexItems = (flip map) displayPaths $ \path -> 
         IndexItem path (modMap ! path)
 
@@ -120,7 +129,7 @@ rebuildIndex = do
   let indexFileContents = templateIndex idxTemp $ 
         IndexData { items = indexItems }
 
-  workDir <- workDir . config <$> ask
+  workDir <- workDir <$> ask
 
   let indexFileDest = workDir </> "index.html"
 
@@ -128,9 +137,12 @@ rebuildIndex = do
 
 finalizeCommands :: MasterMonad ()
 finalizeCommands = do
-  commands <- finalCommands . config <$> ask
-  workDir <- workDir . config <$> ask
-  shellName <- CP.shellName . config <$> ask
+
+  log' "Running final commands ..."
+
+  commands <- finalCommands <$> ask
+  workDir <- workDir <$> ask
+  shellName <- CP.shellName <$> ask
   exit <- liftIO $ executeInShell commands workDir shellName
   
   when (exit == False) $ 
@@ -143,7 +155,9 @@ masterThread chan = forever $ do
   msg <- liftIO $ atomically $ readTQueue chan
   liftIO $ print msg
 
-  sourceDir <- sourceDir . config <$> ask
+  sourceDir <- sourceDir <$> ask
+
+  log' $ format "Message: {}" (show msg)
 
   case msg of
     FullScan -> fullScan
@@ -151,6 +165,8 @@ masterThread chan = forever $ do
 
   rebuildIndex
   finalizeCommands
+
+  log' "Done."
 
 
 sendMsg :: Channel -> Message -> IO ()
@@ -184,28 +200,22 @@ executableParser = execParser $ do
 
 --------------------
 
-main = do
+main = withStdoutLogging $ do
   -- Used for ekg diagnostics
   -- forkServer "localhost" 8000
   
+  setLogLevel LevelDebug
+
   (ServerOptions {..}) <- executableParser
 
-  configFile@(ConfigFile {..}) <- decodeFileThrow configRelativePath 
+  config@(Config {..}) <- decodeFileThrow configRelativePath 
 
   chan <- newTQueueIO
   sendMsg chan FullScan
 
   let initMasterState = emptyMasterState
-  let scheme = formulateJobScheme workDir shellName conversions
 
-  let masterInfo = MasterInfo configFile scheme $ 
-        either 
-          (error "Couldn't compile index template")
-          id $ 
-            M.compileMustacheText "index-template" $ 
-              fromStrict indexTemplateRaw
-
-  _ <- forkIO $ evalRWST (masterThread chan) masterInfo initMasterState 
+  _ <- forkIO $ evalRWST (masterThread chan) config initMasterState 
     >> return ()
 
   notificationMachineServer port (serverC chan)

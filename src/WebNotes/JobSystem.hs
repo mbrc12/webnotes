@@ -1,160 +1,173 @@
-{-# LANGUAGE OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings, RecordWildCards, ScopedTypeVariables #-}
 
 module WebNotes.JobSystem 
-  ( Action (..),
-    Job(..),
-    JobScheme (..),
-    formulateJobScheme,
-    executeJobs,
+  ( executeJobs,
     executeInShell
   )
 where
 
+import WebNotes.Paths
 import WebNotes.Template
+import WebNotes.ConfigParser
 import WebNotes.Utils (explode, doBoth, Extension)
 
 import Prelude hiding (readFile, writeFile)
 
-import Data.Function ((&))
+import Conduit ((.|), runConduit, runResourceT)
+import Control.Concurrent hiding (yield)
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.TQueue
 import Control.Exception (bracket)
-import System.FilePath
-import System.Directory (getAccessTime)
-import Data.Time (UTCTime(..))
+import Control.Logging (log')
+import Control.Monad.RWS.Strict 
+import Control.Monad.Reader (ask)
+import Control.Monad.State.Strict (get, put, modify)
+import Data.Function ((&))
 import Data.HashMap.Strict (HashMap, member, (!), empty, insert)
 import Data.List (foldl')
 import Data.Text (append, pack)
 import Data.Text.IO (readFile, writeFile)
+import Data.Time (UTCTime(..))
+import Fmt (format)
+import System.Directory (getAccessTime)
+import System.FilePath
 import Turtle (shell, ExitCode(..))
+import qualified Data.Conduit.Binary as CB
 import qualified Text.Microstache as M
 import qualified Turtle as TT
 
 
-tempShellFile = ".tempWebNotes"
-pageExtension = "html"
+shellExtension = ".sh"
+pageExtension = ".html"
 
-data Action = ActionFor Extension Job
-  deriving Show
+type JobState = [Char]
 
-data JobScheme 
-  = JobScheme 
-    { scheme :: HashMap Extension Job,
-      shellName :: String,
-      workDir :: FilePath
-    } 
-    deriving Show
+type JobMonad = RWST Config () JobState IO -- It is critical that this state monad is lazy
 
-data Job 
-  = Convert 
-    { destExt :: Extension,
-      commands  :: M.Template
-    }
-  | Page 
-    {
-      commands :: M.Template
-    }  
-    deriving Show
+workFileLength = 8
 
-formulateJobScheme :: FilePath -> String -> [Action] -> JobScheme
-formulateJobScheme workDir shellName actions = 
-  JobScheme 
-    { workDir = workDir,
-      shellName = shellName,
-      scheme  = mapOfJobScheme actions 
-    }
+genWorkFile :: Extension -> JobMonad (Item Work)
+genWorkFile ext = do
+  file <- take workFileLength <$> get
+  modify (drop workFileLength)
+  return $ toWorkFile $ file <.> ext
 
 
-mapOfJobScheme :: [Action] -> HashMap Extension Job
-mapOfJobScheme =
-  foldl' 
-    (\map (ActionFor ext job) ->
-      insert ext job map) 
-    empty
+executeInShell command = do
+  shellName <- shellName <$> ask
+  tempShellFile :: Item Work <- genWorkFile shellExtension
+  config <- ask
 
+  let cmd = 
+       [shellName, " ", (toPath config tempShellFile)] 
+       & map pack 
+       & foldl' append " "
 
-
-executeInShell command workDir shellName = 
-  let tempPath = workDir </> tempShellFile
-      cmd      = [shellName, " ", tempPath] & map pack & foldl' append " "
-   in do
-     bracket 
-      (writeFile tempPath command) 
-      (const $ return False) $  
-        const $ do
-          status <- shell cmd TT.empty
-          case status of
-            ExitSuccess -> return True
-            _           -> return False
+  liftIO $ writeFile (toPath config tempShellFile) command
+  status <- shell cmd TT.empty
+  case status of
+    ExitSuccess -> return True
+    _           -> return False
 
 
 data FileDetails = FileDetails 
-  { originalFile :: FilePath,
-    currentFile :: FilePath,
-    fileName :: String
+  { originalFile :: Item Source,
+    currentFile :: Item Work
   }
 
-data JobState 
+data JobStatus
   = Failed
-  | Ongoing FilePath
-  | Final FilePath
+  | Ongoing (Item Work)
+  | Final (Item Output)
 
 executeJob :: Job -> 
               FileDetails ->
-              String ->
-              String ->
-              IO JobState
-executeJob (Convert {..}) (FileDetails {..}) workDir shellName = 
-  let destPath = workDir </> fileName </> destExt
-      command = templateConvert commands $
-        ConvertData { sourcePath = currentFile,
-                      destPath = destPath 
-                    }
-  in do
-    exit <- executeInShell command workDir shellName
+              JobMonad JobStatus
+executeJob (Convert {..}) (FileDetails {..}) = do
+    destFile <- genWorkFile destExt 
+    config <- ask 
+
+    let sourcePath = toPath config currentFile
+    let destPath = toPath config destFile
+
+    log' $ format "Running conversion job for {}: {} -> {}" 
+      (toPath config originalFile)
+      sourcePath
+      destPath
+
+    let command = templateConvert commands $
+          ConvertData { sourcePath = sourcePath,
+                        destPath = destPath
+                      }
+    
+    exit <- executeInShell command
     return $ case exit of
-               True  -> Ongoing destPath
+               True  -> Ongoing destFile
                False -> Failed
 
-executeJob (Page {..}) (FileDetails {..}) workDir shellName = 
-  let destPath = workDir </> fileName </> pageExtension
-  in do
-    bracket 
-      (doBoth 
-        (readFile currentFile)
-        (getAccessTime originalFile))
-      (const $ return Failed) $ \(pageContents, lastModified) -> do
-        let pageContents = templatePage commands $
-              PageData { originalPath = originalFile,
-                         finalPath = currentFile,
-                         pageContents = pageContents,
-                         lastModified = lastModified
-                       }
-        -- exit <- executeInShell command workDir shellName
-        writeFile destPath pageContents
-        return $ Final destPath
-        -- return $ case exit of 
-        --            True ->  Final destPath
-        --            False -> Failed
+
+executeJob (Page {..}) (FileDetails {..}) = do
+  config <- ask
+
+  let destFile = toOutputExt originalFile pageExtension 
+
+  let origPath = toPath config originalFile
+  let sourcePath = toPath config currentFile
+  let destPath = toPath config destFile
+  
+  log' $ format "Running page formation job for {}: {} -> {}" 
+    origPath
+    sourcePath 
+    destPath 
+  
+  pageContents <- liftIO $ readFile sourcePath
+  lastModified <- liftIO $ getAccessTime origPath
+  let pageData = templatePage pageTemplate $
+        PageData 
+          origPath
+          sourcePath
+          pageContents
+          lastModified
+  
+  liftIO $ writeFile destPath pageData
+  return $ Final destFile
 
 
-executeOneJob :: JobScheme -> FilePath -> FilePath -> IO JobState
-executeOneJob (JobScheme {..}) originalFile currentFile = 
-  let (dir, fileName, ext) = explode currentFile
-  in  if not (member ext scheme) 
+executeOneJob :: Item Source -> Item Work -> JobMonad JobStatus
+executeOneJob originalFile currentFile = do
+    config <- ask
+    let schm = scheme config
+    let (_, _, ext) = explode $ toPath config currentFile
+    if not (member ext schm) 
          then return Failed
-         else executeJob (scheme ! ext) 
+         else executeJob (schm ! ext) 
                 (FileDetails { originalFile = originalFile,
-                               currentFile = currentFile,
-                               fileName = fileName
+                               currentFile = currentFile
                              })
-                workDir
-                shellName 
-                 
-executeJobs :: JobScheme -> FilePath -> IO (Maybe FilePath)
-executeJobs scheme originalFile = jobLoop originalFile
+
+executeJobs :: Item Source -> JobMonad (Maybe (Item Output))
+executeJobs originalFile = do
+    workFile <- copyToWork originalFile
+    jobLoop workFile
   where 
     jobLoop currentFile = do
-      state <- executeOneJob scheme originalFile currentFile
+      config <- ask
+      state <- executeOneJob originalFile currentFile
+      log' $ format "Finished jobs for {}." 
+        (toPath config originalFile)
       case state of 
         Failed -> return Nothing
         Final path -> return $ Just path
         Ongoing path -> jobLoop path
+
+copyToWork :: Item Source -> JobMonad (Item Work)
+copyToWork originalFile = do
+    config <- ask
+    destFile <- genWorkFile (sourceExt originalFile)
+    let sourcePath = toPath config originalFile
+    let destPath = toPath config destFile
+    
+    liftIO . runResourceT . runConduit $
+      (CB.sourceFile sourcePath) .| (CB.sinkFile destPath)
+
+    return destFile
