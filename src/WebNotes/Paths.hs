@@ -8,6 +8,8 @@ module WebNotes.Paths
     Output(..),
     saltFor,
     sourceExt,
+    workExt,
+    getFileName,
     toWork,
     toOutput,
     toOutputExt,
@@ -44,13 +46,22 @@ sourceExt (Item src) =
   let (_, _, ext) = explode src
    in ext
 
+workExt :: Item Work -> Extension
+workExt (Item src) = 
+  let (_, _, ext) = explode src
+   in ext
+
+getFileName :: Item Source -> String
+getFileName (Item src) = 
+  let (_, file, _) = explode src
+   in file
+
 toSourceFile :: FilePath -> Item Source
 toWorkFile :: FilePath -> Item Work
 toOutputFile :: FilePath -> Item Output
 toSourceFile = Item
 toWorkFile = Item
 toOutputFile = Item
-
 
 
 class ItemType a where

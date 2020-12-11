@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings, DeriveGeneric, DuplicateRecordFields #-}
 
 module WebNotes.ConfigParser
   (
@@ -33,12 +33,17 @@ type JobScheme = HashMap Extension Job
 data Job 
   = Convert 
     { destExt :: Extension,
-      commands  :: M.Template
+      commands  :: M.Template,
+      final :: Bool
     }
   | Page 
     {
       pageTemplate :: M.Template
     }  
+  | BinPage
+    {
+      pageTemplate :: M.Template
+    }
     deriving Show
 
 data Config = Config
@@ -62,14 +67,14 @@ formulateJobScheme =
 
 tagIdentifier = "type"
 
-convertActionBuilder :: Extension -> Extension -> T.Text -> Maybe Action
-convertActionBuilder from to commands = 
+convertActionBuilder :: Extension -> Extension -> Bool -> T.Text -> Maybe Action
+convertActionBuilder from to final commands = 
   let templateName = from ++ "-convert" & T.pack & PName
       result = MS.compileMustacheText templateName (TL.fromStrict commands)
   in case result of 
        Left _ -> Nothing
        Right template -> Just $ 
-         ActionFor from (Convert { destExt = to, commands = template })
+         ActionFor from (Convert { destExt = to, final = final, commands = template })
 
 pageActionBuilder :: Extension -> T.Text -> Maybe Action
 pageActionBuilder from commands = 
@@ -81,6 +86,15 @@ pageActionBuilder from commands =
          ActionFor from (Page { pageTemplate = template })
 
 
+binPageActionBuilder :: Extension -> T.Text -> Maybe Action
+binPageActionBuilder from commands = 
+  let templateName = from ++ "-binpage" & T.pack & PName
+      result = MS.compileMustacheText templateName (TL.fromStrict commands)
+  in case result of 
+       Left _ -> Nothing
+       Right template -> Just $ 
+         ActionFor from (BinPage { pageTemplate = template })
+
 instance FromJSON Action where
   parseJSON (Object obj) = 
     if member tagIdentifier obj
@@ -88,10 +102,16 @@ instance FromJSON Action where
               String "convert" -> convertActionBuilder
                 <$> obj .: "from"
                 <*> obj .: "to"
+                <*> obj .: "final"
                 <*> obj .: "commands"
                 & emptyOrUnMaybe
 
               String "page" -> pageActionBuilder
+                <$> obj .: "from"
+                <*> obj .: "template"
+                & emptyOrUnMaybe
+
+              String "binpage" -> binPageActionBuilder
                 <$> obj .: "from"
                 <*> obj .: "template"
                 & emptyOrUnMaybe

@@ -47,6 +47,7 @@ type JobState = [Char]
 type JobMonad = RWST Config () JobState IO -- It is critical that this state monad is lazy
 
 workFileLength = 8
+outputFileLength = 20
 charRange = ('a', 'z')
 
 genWorkFile :: Extension -> JobMonad (Item Work)
@@ -54,6 +55,12 @@ genWorkFile ext = do
   file <- take workFileLength <$> get
   modify (drop workFileLength)
   return $ toWorkFile $ file <.> ext
+
+genOutputFile :: Extension -> JobMonad (Item Output)
+genOutputFile ext = do
+  file <- take outputFileLength <$> get
+  modify (drop outputFileLength)
+  return $ toOutputFile $ file <.> ext
 
 
 executeInShell command = do
@@ -87,7 +94,8 @@ executeJob :: Job ->
               FileDetails ->
               JobMonad JobStatus
 executeJob (Convert {..}) (FileDetails {..}) = do
-    destFile <- genWorkFile destExt 
+
+    destFile <- genWorkFile destExt
     config <- ask 
 
     let sourcePath = toPath config currentFile
@@ -102,20 +110,31 @@ executeJob (Convert {..}) (FileDetails {..}) = do
           ConvertData { sourcePath = sourcePath,
                         destPath = destPath
                       }
-    
+
     exit <- executeInShell command
-    return $ case exit of
-               True  -> Ongoing destFile
-               False -> Failed
+
+    case exit of
+      True  -> do
+        case final of
+          True -> Final <$> copyToOutput destFile
+          False -> return $ Ongoing destFile
+      False -> return Failed
 
 
 executeJob (Page {..}) (FileDetails {..}) = do
   config <- ask
 
   let destFile = toOutputExt originalFile pageExtension 
+  let fileName = pack $ getFileName originalFile
+
+  -- For the final file which is converted to
+  -- a page, we convert it to an output file
+  -- so that is in the repo. 
+  
+  finalFile <- copyToOutput currentFile
 
   let origPath = toPath config originalFile
-  let sourcePath = toPath config currentFile
+  let sourcePath = toPath config finalFile
   let destPath = toPath config destFile
   
   log' $ format "Running page formation job for {}: {} -> {}" 
@@ -131,8 +150,45 @@ executeJob (Page {..}) (FileDetails {..}) = do
   let pageData = templatePage pageTemplate $
         PageData 
           (toRelPath originalFile)
-          (toRelPath currentFile)
+          (toRelPath finalFile)
           pageContents
+          fileName
+          lastModified
+  
+  liftIO $ writeFile destPath pageData
+  return $ Final destFile
+
+
+executeJob (BinPage {..}) (FileDetails {..}) = do
+  config <- ask
+
+  let destFile = toOutputExt originalFile pageExtension 
+  let fileName = pack $ getFileName originalFile
+
+  -- For the final file which is converted to
+  -- a page, we convert it to an output file
+  -- so that is in the repo. 
+  
+  finalFile <- copyToOutput currentFile
+
+  let origPath = toPath config originalFile
+  let sourcePath = toPath config finalFile
+  let destPath = toPath config destFile
+  
+  log' $ format "Running page formation job for {}: {} -> {}" 
+    origPath
+    sourcePath 
+    destPath 
+  
+  lastModified <- liftIO $ getAccessTime origPath
+
+  -- NOTE: We need relative paths to pass to pages
+
+  let pageData = templateBinPage pageTemplate $
+        BinPageData 
+          (toRelPath originalFile)
+          (toRelPath finalFile)
+          fileName
           lastModified
   
   liftIO $ writeFile destPath pageData
@@ -178,3 +234,16 @@ copyToWork originalFile = do
       (CB.sourceFile sourcePath) .| (CB.sinkFile destPath)
 
     return destFile
+
+copyToOutput :: Item Work -> JobMonad (Item Output)
+copyToOutput workFile = do
+    config <- ask
+    destFile <- genOutputFile (workExt workFile)
+    let sourcePath = toPath config workFile
+    let destPath = toPath config destFile
+    
+    liftIO . runResourceT . runConduit $
+      (CB.sourceFile sourcePath) .| (CB.sinkFile destPath)
+
+    return destFile
+

@@ -138,8 +138,10 @@ rebuildIndex = do
 
   let indexItems = (flip map) displayItems $ \item -> 
         let dest = destIndex ! item
-         in IndexItem (toRelPath dest) (modMap ! item)
-  --                  ^ we need rel path for index.html
+         in IndexItem 
+              (toRelPath dest) 
+              (getFileName item)
+              (modMap ! item)
 
 
   idxTemp <- indexTemplate <$> ask 

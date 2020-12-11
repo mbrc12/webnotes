@@ -1,10 +1,12 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings, DuplicateRecordFields #-}
 
 module WebNotes.Template
   ( templatePage,
+    templateBinPage,
     templateConvert,
     templateIndex,
     PageData(..),
+    BinPageData(..),
     ConvertData(..),
     IndexItem(..),
     IndexData(..)
@@ -25,8 +27,17 @@ data PageData = PageData
   { originalPathRel :: FilePath, -- original path of the content file 
     finalPathRel :: FilePath,    -- final path of the content file
     pageContents :: T.Text, -- final contents
+    fileName :: T.Text,
     lastModified :: UTCTime
   }
+
+data BinPageData = BinPageData
+  { originalPathRel :: FilePath, -- original path of the content file 
+    finalPathRel :: FilePath,    -- final path of the content file
+    fileName :: T.Text,
+    lastModified :: UTCTime
+  }
+  
 
 data ConvertData = ConvertData
   { sourcePath :: FilePath,
@@ -35,6 +46,7 @@ data ConvertData = ConvertData
 
 data IndexItem = IndexItem
   { displayPath :: FilePath,
+    itemName    :: String,
     lastMod     :: UTCTime
   }
 
@@ -57,7 +69,18 @@ templatePage templateData (PageData {..}) = toStrict $
     [ 
       "orig_path_rel" .= originalPathRel,
       "final_path_rel" .= finalPathRel, 
+      "file_name" .= fileName,
       "contents" .= pageContents,
+      "last_modified" .= (T.pack $ show lastModified)
+    ]
+
+templateBinPage :: M.Template -> BinPageData -> T.Text
+templateBinPage templateData (BinPageData {..}) = toStrict $ 
+  M.renderMustache templateData $ object $
+    [ 
+      "orig_path_rel" .= originalPathRel,
+      "final_path_rel" .= finalPathRel, 
+      "file_name" .= fileName,
       "last_modified" .= (T.pack $ show lastModified)
     ]
 
@@ -69,6 +92,7 @@ templateIndex templateData (IndexData {..}) = toStrict $
         object $ 
           [ 
             "display_path" .= (T.pack $ displayPath item),
+            "file_name" .= (T.pack $ itemName item),
             "last_modified" .= (T.pack . show $ lastMod item)
           ]) <$> items)
     ]
