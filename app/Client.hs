@@ -9,12 +9,12 @@ import Conduit
 
 data ClientOptions = ClientOptions
   { port :: Int,
-    message :: Message
+    message :: Message'
   } 
   deriving Show
 
-fileChangedParser :: Parser Message
-fileChangedParser = FileChanged <$> strOption
+fileChangedParser :: Parser Message'
+fileChangedParser = FileChanged' <$> strOption
   (   long "file"
   <>  short 'f'
   <>  help "Inform the server that this file has (probably) changed"
@@ -22,8 +22,8 @@ fileChangedParser = FileChanged <$> strOption
   <>  metavar "FILENAME"
   )
 
-fullScanParser :: Parser Message
-fullScanParser = flag' FullScan
+fullScanParser :: Parser Message'
+fullScanParser = flag' FullScan'
   (   long "fullscan"
   <>  short 's'
   <>  help "Do a full scan of the source directory for changed files"

@@ -2,7 +2,8 @@
 
 module WebNotes.JobSystem 
   ( executeJobs,
-    executeInShell
+    executeInShell,
+    JobMonad(..)
   )
 where
 
@@ -31,6 +32,7 @@ import Data.Time (UTCTime(..))
 import Fmt (format)
 import System.Directory (getAccessTime)
 import System.FilePath
+import System.Random (randomRs, mkStdGen)
 import Turtle (shell, ExitCode(..))
 import qualified Data.Conduit.Binary as CB
 import qualified Text.Microstache as M
@@ -45,6 +47,7 @@ type JobState = [Char]
 type JobMonad = RWST Config () JobState IO -- It is critical that this state monad is lazy
 
 workFileLength = 8
+charRange = ('a', 'z')
 
 genWorkFile :: Extension -> JobMonad (Item Work)
 genWorkFile ext = do
@@ -122,10 +125,13 @@ executeJob (Page {..}) (FileDetails {..}) = do
   
   pageContents <- liftIO $ readFile sourcePath
   lastModified <- liftIO $ getAccessTime origPath
+
+  -- NOTE: We need relative paths to pass to pages
+
   let pageData = templatePage pageTemplate $
         PageData 
-          origPath
-          sourcePath
+          (toRelPath originalFile)
+          (toRelPath currentFile)
           pageContents
           lastModified
   
@@ -147,6 +153,7 @@ executeOneJob originalFile currentFile = do
 
 executeJobs :: Item Source -> JobMonad (Maybe (Item Output))
 executeJobs originalFile = do
+    put $ randomRs charRange $ mkStdGen (saltFor originalFile) 
     workFile <- copyToWork originalFile
     jobLoop workFile
   where 

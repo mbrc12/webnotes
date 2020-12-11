@@ -6,6 +6,7 @@ module WebNotes.Paths
     Source(..),
     Work(..),
     Output(..),
+    saltFor,
     sourceExt,
     toWork,
     toOutput,
@@ -14,6 +15,7 @@ module WebNotes.Paths
     toWorkFile,
     toOutputFile,
     toPath,
+    toRelPath
   )
 where
 
@@ -21,12 +23,21 @@ import WebNotes.ConfigParser
 import WebNotes.Utils
 
 import System.FilePath
+import Data.Hashable
 
 newtype Item a = Item { unItem :: FilePath }
+  deriving (Show, Eq)
 
 data Source
 data Work
 data Output
+
+instance Hashable (Item a) where
+  hashWithSalt salt = hashWithSalt salt . unItem
+
+
+saltFor :: Item Source -> Int
+saltFor = hash
 
 sourceExt :: Item Source -> Extension
 sourceExt (Item src) = 
@@ -41,17 +52,22 @@ toWorkFile = Item
 toOutputFile = Item
 
 
+
 class ItemType a where
   toPath :: Config -> Item a -> FilePath
+  toRelPath :: Item a -> FilePath
 
 instance ItemType Source where
   toPath config item = (sourceDir config) </> (unItem item)
+  toRelPath = unItem
 
 instance ItemType Work where
   toPath config item = (workDir config) </> (unItem item)
+  toRelPath = unItem
 
 instance ItemType Output where
   toPath config item = (outputDir config) </> (unItem item)
+  toRelPath = unItem
 
 
 toWork :: Item Source -> Item Work

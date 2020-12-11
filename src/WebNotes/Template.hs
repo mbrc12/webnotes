@@ -22,8 +22,8 @@ import qualified Data.Text.Encoding as E
 import qualified Text.Microstache as M
 
 data PageData = PageData
-  { originalPath :: FilePath, -- original path of the content file 
-    finalPath :: FilePath,    -- final path of the content file
+  { originalPathRel :: FilePath, -- original path of the content file 
+    finalPathRel :: FilePath,    -- final path of the content file
     pageContents :: T.Text, -- final contents
     lastModified :: UTCTime
   }
@@ -55,8 +55,8 @@ templatePage :: M.Template -> PageData -> T.Text
 templatePage templateData (PageData {..}) = toStrict $ 
   M.renderMustache templateData $ object $
     [ 
-      "original_path" .= originalPath,
-      "final_path" .= finalPath, 
+      "orig_path_rel" .= originalPathRel,
+      "final_path_rel" .= finalPathRel, 
       "contents" .= pageContents,
       "last_modified" .= (T.pack $ show lastModified)
     ]

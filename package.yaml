@@ -38,7 +38,8 @@ library:
         - yaml
         - logging
         - fmt
-        - random >= 1.2.0
+        - random
+        - hashable
         # - ekg  
 
 executables:
@@ -66,6 +67,7 @@ executables:
           - directory
           - logging
           - fmt
+          - random
 
   webnotes-client:
         main:                Client.hs
@@ -91,3 +93,4 @@ executables:
           - directory
           - logging
           - fmt
+          - random

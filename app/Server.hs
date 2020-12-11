@@ -2,6 +2,7 @@
 
 module Server where
 
+import WebNotes.Paths
 import WebNotes.Template
 import WebNotes.JobSystem hiding (workDir, sourceDir)
 import WebNotes.ConfigParser as CP
@@ -10,7 +11,7 @@ import WebNotes.SHA
 
 import Prelude hiding (writeFile)
 
-import Conduit
+import Conduit hiding (Source)
 import Control.Concurrent hiding (yield)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TQueue
@@ -42,9 +43,9 @@ configRelativePath = "webnotesconf.yaml"
 type MasterInfo = Config
 
 type Channel = TQueue Message
-type SHAIndex = HashMap FilePath String
-type DestIndex = HashMap FilePath FilePath
-type ModIndex = HashMap FilePath UTCTime
+type SHAIndex = HashMap (Item Source) String
+type DestIndex = HashMap (Item Source) (Item Output)
+type ModIndex = HashMap (Item Source) UTCTime
 
 data MasterState = MasterState
   { shaIndex :: SHAIndex,
@@ -63,53 +64,61 @@ appDestIndex f ms
 appModIndex f ms
   = ms {modIndex = f (modIndex ms)}
 
-type MasterMonad = RWST MasterInfo () MasterState IO
+type MasterT = RWST MasterInfo () MasterState
+type MasterMonad = MasterT JobMonad
 
 -------------------
 
-listFiles :: FilePath -> IO [FilePath]
-listFiles path = listDirectory path 
-  <&> (map (path </>))
-  >>= filterM (\obj -> not <$> (doesDirectoryExist obj))
- 
+listFiles :: MasterMonad [Item Source]
+listFiles = do
+  sourceDir <- sourceDir <$> ask
+  filelist <- liftIO $ listDirectory sourceDir
+  valids <- filterM (\obj -> 
+      not <$> (liftIO $ 
+        doesDirectoryExist (sourceDir </> obj))) $
+      filelist
+  return $ map toSourceFile valids 
 
 fullScan :: MasterMonad ()
 fullScan = do
   log' "Initializing full scan ..."
 
   source <- sourceDir <$> ask
-  files <- liftIO $ listFiles source
+  files <- listFiles
   mapM_ fileChanged files
 
 
-fileChanged :: FilePath -> MasterMonad ()
-fileChanged file = do
+fileChanged :: Item Source -> MasterMonad ()
+fileChanged item = do
+
+  config <- ask
+  let file = toPath config item
 
   log' $ format "Processing {} ..." file
 
   -- update SHA  
 
   sha <- liftIO $ computeSHA file
-  modify . appShaIndex $ insert file sha
+  modify . appShaIndex $ insert item sha
 
   -- update last modified
   
   lastAccess <- liftIO $ getAccessTime file
-  modify . appModIndex $ insert file lastAccess
+  modify . appModIndex $ insert item lastAccess
 
   log' $ format "SHA: {}, last accessed: {}" sha lastAccess 
 
   -- execute tasks 
   config <- ask
-  destFile <- liftIO $ executeJobs config file
+  destFile <- lift $ executeJobs item
 
   case destFile of
     Nothing -> do
       warn' $ "No destination file produced!"
-      modify . appDestIndex $ delete file
+      modify . appDestIndex $ delete item
     Just dest -> do
-      log' $ format "Destination: {}" destFile
-      modify . appDestIndex $ insert file dest
+      log' $ format "Destination: {}" (toPath config dest)
+      modify . appDestIndex $ insert item dest
 
 
 
@@ -117,12 +126,21 @@ rebuildIndex :: MasterMonad ()
 rebuildIndex = do
   log' $ format "Rebuilding index..."
 
-  files <- keys . destIndex <$> get
+  config <- ask
+
+  destIndex <- destIndex <$> get
+
+  let items = keys destIndex
+
   modMap <- modIndex <$> get
 
-  let displayPaths = sortOn (modMap !) files
-  let indexItems = (flip map) displayPaths $ \path -> 
-        IndexItem path (modMap ! path)
+  let displayItems = sortOn (modMap !) items
+
+  let indexItems = (flip map) displayItems $ \item -> 
+        let dest = destIndex ! item
+         in IndexItem (toRelPath dest) (modMap ! item)
+  --                  ^ we need rel path for index.html
+
 
   idxTemp <- indexTemplate <$> ask 
   
@@ -131,7 +149,7 @@ rebuildIndex = do
 
   workDir <- workDir <$> ask
 
-  let indexFileDest = workDir </> "index.html"
+  let indexFileDest = toPath config (toOutputFile "index.html")
 
   liftIO $ writeFile indexFileDest indexFileContents
 
@@ -143,7 +161,7 @@ finalizeCommands = do
   commands <- finalCommands <$> ask
   workDir <- workDir <$> ask
   shellName <- CP.shellName <$> ask
-  exit <- liftIO $ executeInShell commands workDir shellName
+  exit <- lift $ executeInShell commands
   
   when (exit == False) $ 
     error "Finalization commands failed."
@@ -153,15 +171,15 @@ finalizeCommands = do
 masterThread :: Channel -> MasterMonad ()
 masterThread chan = forever $ do
   msg <- liftIO $ atomically $ readTQueue chan
-  liftIO $ print msg
+  -- liftIO $ print msg
 
   sourceDir <- sourceDir <$> ask
 
-  log' $ format "Message: {}" (show msg)
+  -- log' $ format "Message: {}" (show msg)
 
   case msg of
     FullScan -> fullScan
-    FileChanged file -> fileChanged $ sourceDir </> file
+    FileChanged file -> fileChanged file
 
   rebuildIndex
   finalizeCommands
@@ -215,7 +233,11 @@ main = withStdoutLogging $ do
 
   let initMasterState = emptyMasterState
 
-  _ <- forkIO $ evalRWST (masterThread chan) config initMasterState 
+  _ <- forkIO $ 
+    evalRWST 
+    (evalRWST (masterThread chan) config initMasterState)
+    config 
+    undefined
     >> return ()
 
   notificationMachineServer port (serverC chan)

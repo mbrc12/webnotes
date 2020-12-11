@@ -4,13 +4,16 @@ module WebNotes.Notification
   ( notificationMachineServer,
     -- notificationMachineClient,
     Message (..),
+    Message'(..),
     Response (..),
     printAndOKServer,
     oneShotClient
   )
 where
 
-import Conduit hiding (connect)
+import WebNotes.Paths
+
+import Conduit hiding (connect, Source)
 import Control.Monad (forever, unless, when)
 import Control.Monad.IO.Class
 import Data.Conduit.Network
@@ -32,8 +35,12 @@ startIdentifier = "%%START%%" :: T.Text
 fullScanCommand = "%%FULLSCAN%%"
 
 data Message
-  = FileChanged FilePath
+  = FileChanged (Item Source)
   | FullScan
+
+data Message'
+  = FileChanged' FilePath
+  | FullScan'
   deriving (Show)
 
 data Response
@@ -87,7 +94,7 @@ accumulateTillSubstr substr = accumAll ""
   where 
     accumAll acc = do
       msg <- await
-      liftIO $ print msg
+      -- liftIO $ print msg
       case msg of
         Nothing -> return acc
         Just message -> if T.isInfixOf substr message
@@ -97,7 +104,7 @@ accumulateTillSubstr substr = accumAll ""
 messageConverterC :: (MonadIO m) => ConduitT T.Text Message m ()
 messageConverterC = do
   accum <- accumulateTillSubstr stopIdentifier
-  liftIO $ TIO.putStrLn (T.append "got -> " accum)
+  -- liftIO $ TIO.putStrLn (T.append "got -> " accum)
 
   if not (T.isInfixOf stopIdentifier accum) -- client stopped
     then return ()
@@ -113,7 +120,7 @@ messageConverterC = do
                      yield FullScan
                      messageConverterC
                    else do
-                     msg & T.unpack & FileChanged & yield
+                     msg & T.unpack & toSourceFile & FileChanged & yield
                      messageConverterC
 
 
@@ -142,25 +149,27 @@ responseConverterC = awaitForever $ \resp -> resp & show & T.pack & yield
 printAndOKServer :: ConduitT Message Response IO ()
 printAndOKServer = do
   msg <- await
-  liftIO $ print msg
   case msg of
     Nothing -> return ()
-    _ -> do 
+    Just sth -> do 
+      case sth of
+        FullScan -> liftIO $ putStrLn "> Do full scan <"
+        FileChanged path -> liftIO $ putStrLn $ "> Changed: " ++ show path ++ " <"
       yield OK
       printAndOKServer
 
 sendText sock msg = msg & E.encodeUtf8 & send sock
 recvText sock len = (fmap E.decodeUtf8) <$> recv sock len 
 
-oneShotClient :: Int -> Message -> IO Response
+oneShotClient :: Int -> Message' -> IO Response
 oneShotClient port msg = 
   connect "localhost" (show port) $ \(sock, _) -> do
     putStrLn "Connected to Server"
 
     sendText sock startIdentifier
     case msg of
-      FullScan -> sendText sock fullScanCommand
-      FileChanged path -> sendText sock (T.pack path)
+      FullScan' -> sendText sock fullScanCommand
+      FileChanged' path -> sendText sock (T.pack path)
     sendText sock stopIdentifier
     
     resp <- recvText sock maxLenResponse

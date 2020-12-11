@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6ef8db6faa26e7f3b9702bd52fac509c8a270533f218554d30fb1942e2e4571e
+-- hash: 6165b71ab2e46938702f2ebc55d5e9c9cee6aa8e11cdd65c55419c37d9d1cdc1
 
 name:           webnotes
 version:        0.1.0.0
@@ -48,13 +48,14 @@ library
     , directory
     , filepath
     , fmt
+    , hashable
     , logging
     , microstache
     , mtl
     , network-simple
     , pipes
     , pipes-network
-    , random >=1.2.0
+    , random
     , stm
     , text
     , time
@@ -81,6 +82,7 @@ executable webnotes-client
     , microstache
     , mtl
     , optparse-applicative
+    , random
     , stm
     , text
     , time
@@ -107,6 +109,7 @@ executable webnotes-server
     , microstache
     , mtl
     , optparse-applicative
+    , random
     , stm
     , text
     , time
